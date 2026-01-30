@@ -1,0 +1,107 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dra-file-driver
+  namespace: dra-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dra-file-driver
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["resource.k8s.io"]
+    resources: ["resourceclaims", "resourceclaimtemplates", "deviceclasses", "podschedulingcontexts", "resourceslices"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["resource.k8s.io"]
+    resources: ["resourceclaims/status"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dra-file-driver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dra-file-driver
+subjects:
+  - kind: ServiceAccount
+    name: dra-file-driver
+    namespace: dra-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: dra-file-driver
+  namespace: dra-system
+  labels:
+    app: dra-file-driver
+spec:
+  selector:
+    matchLabels:
+      app: dra-file-driver
+  template:
+    metadata:
+      labels:
+        app: dra-file-driver
+    spec:
+      serviceAccountName: dra-file-driver
+      priorityClassName: system-node-critical
+      containers:
+        - name: driver
+          image: dra-file-driver:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --driver-name=file.dra.example.com
+            - --plugin-socket=/var/lib/kubelet/plugins/file.dra.example.com/plugin.sock
+            - --registration-socket=/var/lib/kubelet/plugins_registry/file.dra.example.com-reg.sock
+            - --resource-dir=/etc/dra
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: plugins-dir
+              mountPath: /var/lib/kubelet/plugins
+            - name: plugins-registry
+              mountPath: /var/lib/kubelet/plugins_registry
+            - name: resource-dir
+              mountPath: /etc/dra
+            - name: cdi-dir
+              mountPath: /var/run/cdi
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+      volumes:
+        - name: plugins-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins
+            type: DirectoryOrCreate
+        - name: plugins-registry
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: DirectoryOrCreate
+        - name: resource-dir
+          hostPath:
+            path: /etc/dra
+            type: DirectoryOrCreate
+        - name: cdi-dir
+          hostPath:
+            path: /var/run/cdi
+            type: DirectoryOrCreate
+      tolerations:
+        - operator: Exists

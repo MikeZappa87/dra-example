@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dra-test-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dra-test
+  template:
+    metadata:
+      labels:
+        app: dra-test
+    spec:
+      containers:
+        - name: test-container
+          image: busybox:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Pod started: $(hostname)"
+              echo "Checking DRA resource file..."
+              while true; do
+                if [ -f /etc/dra/file1 ]; then
+                  echo "=== Content of /etc/dra/file1 ==="
+                  cat /etc/dra/file1
+                  echo "================================="
+                else
+                  echo "File /etc/dra/file1 does not exist yet"
+                fi
+                sleep 10
+              done
+          # No volumeMounts needed - CDI injects /etc/dra/file1 automatically
+          resources:
+            claims:
+            - name: file-resource
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      # No volumes needed - CDI handles the mount via the DRA driver
+      resourceClaims:
+        - name: file-resource
+          resourceClaimTemplateName: file-claim-template
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: file-claim-template
+  namespace: default
+spec:
+  spec:
+    devices:
+      requests:
+      - name: file-request
+        exactly:
+          deviceClassName: file-resource
+          selectors:
+          - cel:
+              expression: device.driver == "file.dra.example.com" && device.attributes["file.dra.example.com"].filename == "file1"

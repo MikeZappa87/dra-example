@@ -1,0 +1,21 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: dra-demo
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.35.0
+    extraMounts:
+      - hostPath: /tmp/dra
+        containerPath: /etc/dra
+  - role: worker
+    image: kindest/node:v1.35.0
+    extraMounts:
+      - hostPath: /tmp/dra
+        containerPath: /etc/dra
+  - role: worker
+    image: kindest/node:v1.35.0
+    extraMounts:
+      - hostPath: /tmp/dra
+        containerPath: /etc/dra
+featureGates:
+  DynamicResourceAllocation: true
